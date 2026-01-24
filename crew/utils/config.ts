@@ -28,7 +28,7 @@ export interface CrewConfig {
     cleanupDays: number;
   };
   memory: { enabled: boolean };
-  planSync: { enabled: boolean; crossEpic: boolean };
+  planSync: { enabled: boolean };
   review: { enabled: boolean; maxIterations: number };
   work: { maxAttemptsPerTask: number; maxWaves: number; stopOnBlock: boolean };
 }
@@ -46,7 +46,7 @@ const DEFAULT_CONFIG: CrewConfig = {
   },
   artifacts: { enabled: true, cleanupDays: 7 },
   memory: { enabled: false },
-  planSync: { enabled: false, crossEpic: false },
+  planSync: { enabled: false },
   review: { enabled: true, maxIterations: 3 },
   work: { maxAttemptsPerTask: 5, maxWaves: 50, stopOnBlock: false },
 };

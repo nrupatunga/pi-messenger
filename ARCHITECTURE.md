@@ -122,12 +122,13 @@ No epics. Just PRD-based task planning and execution.
 │   │                                                                          │   │
 │   │   Continues until:                                                       │   │
 │   │   • All tasks completed                                                  │   │
-│   │   • Task blocked after maxAttempts                                       │   │
-│   │   • maxWaves reached                                                     │   │
+│   │   • All remaining tasks blocked (no ready tasks)                         │   │
 │   └─────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**Note:** Review is a separate manual action (`action: "review"`), not automatic after work completion.
 
 ## Model Summary
 
@@ -184,8 +185,11 @@ No epics. Just PRD-based task planning and execution.
 │   └── task-2.md
 ├── blocks/
 │   └── task-3.md             # Block context (if blocked)
-├── artifacts/
-│   └── {runId}/              # Debug artifacts (input/output/jsonl)
+├── artifacts/                # Debug artifacts (flat, auto-cleaned)
+│   ├── {runId}_{agent}_input.md
+│   ├── {runId}_{agent}_output.md
+│   ├── {runId}_{agent}.jsonl
+│   └── {runId}_{agent}_meta.json
 └── config.json               # Project-level crew config
 ```
 
@@ -197,6 +201,12 @@ No epics. Just PRD-based task planning and execution.
     "concurrency": {
       "scouts": 4,
       "workers": 2
+    },
+    "truncation": {
+      "scouts": { "bytes": 51200, "lines": 500 },
+      "workers": { "bytes": 204800, "lines": 5000 },
+      "reviewers": { "bytes": 102400, "lines": 2000 },
+      "analysts": { "bytes": 102400, "lines": 2000 }
     },
     "review": {
       "enabled": true,
@@ -210,12 +220,22 @@ No epics. Just PRD-based task planning and execution.
     "artifacts": {
       "enabled": true,
       "cleanupDays": 7
-    }
+    },
+    "memory": { "enabled": false },
+    "planSync": { "enabled": false }
   }
 }
 ```
 
-Set `concurrency.scouts: 1` for sequential scout execution.
+| Section | Description |
+|---------|-------------|
+| `concurrency` | Parallel execution limits |
+| `truncation` | Output size limits per agent role |
+| `review` | Auto-review settings (note: `enabled` and `maxIterations` defined but not enforced) |
+| `work` | Execution limits (note: `maxWaves` and `maxAttemptsPerTask` defined but not enforced) |
+| `artifacts` | Debug artifact storage |
+| `memory` | Memory system (not yet implemented) |
+| `planSync` | Auto-sync downstream specs (not yet implemented) |
 
 ## Task IDs
 
