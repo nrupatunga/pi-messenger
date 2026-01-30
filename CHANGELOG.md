@@ -1,6 +1,21 @@
 # Changelog
 
-## [Unreleased]
+## [0.8.0] - 2026-01-30
+
+### Added
+- **Planning progress file** - `.pi/messenger/crew/planning-progress.md` accumulates planner findings and reviewer feedback across passes and runs. Persists through plan deletions. User-editable: add steering notes that the planner reads on every run.
+- `planning.maxPasses` config option (default: 3). Set to 1 for single-pass behavior.
+- JSON task block parsing (`tasks-json` fenced block) as the primary task extraction path, with the existing markdown regex as fallback.
+- Shared verdict parser (`crew/utils/verdict.ts`) used by both review and planning handlers.
+
+### Changed
+- **Planning redesign: single planner agent** - Replaced the 5-scout + gap-analyst pipeline (6 LLM sessions) with a single `crew-planner` agent that explores the codebase iteratively in one session. Cheaper, faster, no information loss from truncation handoffs. Crew agent count: 10 to 5.
+- **Iterative planning with review** - Planner runs in a multi-pass loop with reviewer feedback until SHIP verdict or `maxPasses` reached. Falls back gracefully on reviewer/planner failures.
+- Deprecated scout and gap-analyst agent files auto-cleaned from `~/.pi/agent/agents/` on first use.
+
+### Removed
+- 5 scout agents (`crew-repo-scout`, `crew-practice-scout`, `crew-docs-scout`, `crew-web-scout`, `crew-github-scout`) and `crew-gap-analyst`.
+- `concurrency.scouts` and `truncation.scouts` config options (replaced by `truncation.planners`).
 
 ## [0.7.4] - 2026-01-29
 

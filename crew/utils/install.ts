@@ -23,20 +23,21 @@ const TARGET_SKILLS_DIR = path.join(homedir(), ".pi", "agent", "skills");
 
 // List of crew agents to install
 const CREW_AGENTS = [
-  // Scouts (5)
+  "crew-planner.md",
+  "crew-interview-generator.md",
+  "crew-plan-sync.md",
+  "crew-worker.md",
+  "crew-reviewer.md",
+];
+
+// Agents removed in the planning redesign (scouts + gap-analyst replaced by single planner)
+const DEPRECATED_AGENTS = [
   "crew-repo-scout.md",
   "crew-practice-scout.md",
   "crew-docs-scout.md",
   "crew-web-scout.md",
   "crew-github-scout.md",
-  // Analysts (3)
   "crew-gap-analyst.md",
-  "crew-interview-generator.md",
-  "crew-plan-sync.md",
-  // Worker (1)
-  "crew-worker.md",
-  // Reviewer (1)
-  "crew-reviewer.md",
 ];
 
 // List of skills to install (directory names)
@@ -156,14 +157,31 @@ export function installAgents(force: boolean = false): InstallResult {
 }
 
 /**
+ * Remove deprecated agent files from the target directory.
+ * Runs on every ensureAgentsInstalled call (cheap: a few existsSync calls).
+ */
+function cleanupDeprecatedAgents(): void {
+  for (const agent of DEPRECATED_AGENTS) {
+    const targetPath = path.join(TARGET_AGENTS_DIR, agent);
+    try {
+      if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
+    } catch {
+      // Best effort
+    }
+  }
+}
+
+/**
  * Uninstall crew agents (remove from target directory).
+ * Also removes any deprecated agents that may still be lingering.
  */
 export function uninstallAgents(): { removed: string[]; notFound: string[]; errors: string[] } {
   const removed: string[] = [];
   const notFound: string[] = [];
   const errors: string[] = [];
 
-  for (const agent of CREW_AGENTS) {
+  const allAgents = [...CREW_AGENTS, ...DEPRECATED_AGENTS];
+  for (const agent of allAgents) {
     const targetPath = path.join(TARGET_AGENTS_DIR, agent);
 
     if (!fs.existsSync(targetPath)) {
@@ -187,6 +205,8 @@ export function uninstallAgents(): { removed: string[]; notFound: string[]; erro
  * Returns true if all agents are available.
  */
 export function ensureAgentsInstalled(): boolean {
+  cleanupDeprecatedAgents();
+
   const status = checkAgentStatus();
   
   if (status.missing.length === 0 && status.outdated.length === 0) {
@@ -195,20 +215,6 @@ export function ensureAgentsInstalled(): boolean {
 
   const result = installAgents();
   return result.errors.length === 0;
-}
-
-/**
- * Get the source agents directory path.
- */
-export function getSourceAgentsDir(): string {
-  return SOURCE_AGENTS_DIR;
-}
-
-/**
- * Get the target agents directory path.
- */
-export function getTargetAgentsDir(): string {
-  return TARGET_AGENTS_DIR;
 }
 
 // =============================================================================

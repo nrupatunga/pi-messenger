@@ -155,13 +155,3 @@ export interface AgentResult {
 // =============================================================================
 
 export type AppendEntryFn = (type: string, data: unknown) => void;
-
-// =============================================================================
-// Generated Task (from plan phase)
-// =============================================================================
-
-export interface GeneratedTask {
-  title: string;
-  description: string;
-  dependsOn?: string[];          // Task titles (resolved to IDs during creation)
-}

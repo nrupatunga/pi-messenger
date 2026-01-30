@@ -37,13 +37,13 @@ Ask your agent to plan and execute from a PRD:
 
 ```typescript
 pi_messenger({ action: "plan" })
-// → Scouts analyze codebase, gap-analyst creates tasks
+// → Planner analyzes codebase, creates tasks
 
 pi_messenger({ action: "work", autonomous: true })
 // → Workers execute tasks in waves until done
 ```
 
-> **Note:** Crew agents (scouts, workers, reviewers) automatically join the mesh as their first action.
+> **Note:** Crew agents (planner, workers, reviewers) automatically join the mesh as their first action.
 
 ## Install
 
@@ -118,7 +118,7 @@ Crew provides multi-agent task orchestration with a simplified PRD-based workflo
 
 ### Basic Workflow
 
-1. **Plan** - Scouts analyze your codebase and PRD, gap-analyst creates tasks
+1. **Plan** - Planner analyzes your codebase and PRD, creates tasks
 2. **Work** - Workers implement tasks in parallel waves
 3. **Review** - Reviewer checks each implementation
 
@@ -181,12 +181,12 @@ pi_messenger({ action: "review", target: "task-1" })
 
 ### Planning Workflow
 
-The `plan` action orchestrates a multi-agent analysis:
+The `plan` action runs a multi-pass planning loop: the planner drafts tasks, a reviewer checks them against the PRD, and the planner refines until SHIP or `planning.maxPasses` is reached. All passes and feedback are stored in `.pi/messenger/crew/planning-progress.md`.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Your Project                                                    │
-│  ├── PRD.md            ◄── Scouts discover and read these       │
+│  ├── PRD.md            ◄── Planner discovers and reads these    │
 │  ├── DESIGN.md                                                   │
 │  ├── src/                                                        │
 │  └── ...                                                         │
@@ -194,20 +194,25 @@ The `plan` action orchestrates a multi-agent analysis:
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phase 1: Scouts (parallel)                                      │
-│  ├── crew-repo-scout      → Analyzes codebase structure          │
-│  ├── crew-docs-scout      → Reads project documentation          │
-│  ├── crew-practice-scout  → Finds coding conventions             │
-│  ├── crew-web-scout       → Searches web for best practices      │
-│  └── crew-github-scout    → Examines real repos via gh CLI       │
+│  Planner (opus)                                                  │
+│  ├── Explores codebase structure and patterns                    │
+│  ├── Reads project documentation                                 │
+│  ├── Identifies gaps, edge cases, security concerns              │
+│  └── Drafts task breakdown with dependencies                     │
+└─────────────────────────────────────────────────────────────────┘
+                              │ append to
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  planning-progress.md (history + feedback)                       │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Phase 2: Gap Analyst                                            │
-│  └── Synthesizes findings → Creates task breakdown               │
+│  Reviewer (gpt-5.2-high)                                          │
+│  ├── SHIP  ✅  or NEEDS_WORK 🔄                                  │
+│  └── Feeds back into the next planner pass                       │
 └─────────────────────────────────────────────────────────────────┘
-                              │
+                              │ SHIP
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Result: Tasks with Dependencies                                 │
@@ -218,7 +223,7 @@ The `plan` action orchestrates a multi-agent analysis:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**No special format required** - just put your docs in the project. Scouts will find and read markdown files, READMEs, and code comments.
+**No special format required** -- just put your docs in the project. The planner finds and reads markdown files, READMEs, and code comments.
 
 ### Autonomous Mode
 
@@ -261,7 +266,8 @@ The `/messenger` overlay includes a Crew tab showing task status:
 ```
 .pi/messenger/crew/
 ├── plan.json               # Plan metadata (PRD path, progress)
-├── plan.md                 # Gap analyst output
+├── plan.md                 # Planner output
+├── planning-progress.md    # Planning loop history + feedback
 ├── tasks/
 │   ├── task-1.json         # Task metadata
 │   ├── task-1.md           # Task specification
@@ -278,8 +284,9 @@ Add to `~/.pi/agent/pi-messenger.json`:
 ```json
 {
   "crew": {
-    "concurrency": { "scouts": 4, "workers": 2 },
+    "concurrency": { "workers": 2 },
     "review": { "enabled": true, "maxIterations": 3 },
+    "planning": { "maxPasses": 3 },
     "work": { "maxAttemptsPerTask": 5, "maxWaves": 50 }
   }
 }
@@ -287,10 +294,10 @@ Add to `~/.pi/agent/pi-messenger.json`:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| `concurrency.scouts` | Max parallel scouts during planning | `4` |
 | `concurrency.workers` | Max parallel workers during work | `2` |
 | `review.enabled` | Enable review functionality | `true` |
 | `review.maxIterations` | Max review iterations per task | `3` |
+| `planning.maxPasses` | Max planner passes before accepting last output | `3` |
 | `work.maxAttemptsPerTask` | Retries before blocking a task | `5` |
 | `work.maxWaves` | Max waves in autonomous mode | `50` |
 
@@ -303,7 +310,7 @@ pi_messenger({ action: "crew.install" })
 ```
 
 **What gets installed:**
-- **10 agents** in `~/.pi/agent/agents/` (scouts, analysts, worker, reviewer)
+- **5 agents** in `~/.pi/agent/agents/` (planner, analysts, worker, reviewer)
 - **1 skill** in `~/.pi/agent/skills/` (pi-messenger-crew quick reference)
 
 To remove:

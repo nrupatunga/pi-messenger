@@ -25,7 +25,7 @@ pi_messenger({ action: "list" })  // See other agents
 #### 1. Install Crew Agents (one-time)
 ```typescript
 pi_messenger({ action: "crew.install" })
-pi_messenger({ action: "crew.agents" })  // Verify 10 agents
+pi_messenger({ action: "crew.agents" })  // Verify 5 agents
 ```
 
 #### 2. Plan from PRD
@@ -97,7 +97,7 @@ pi_messenger({ action: "send", broadcast: true, message: "Announcement" })
 // 1. Join
 pi_messenger({ action: "join" })
 
-// 2. Plan (spawns scouts + analyst)
+// 2. Plan (spawns planner agent)
 pi_messenger({ action: "plan" })
 
 // 3. Check tasks
@@ -117,7 +117,7 @@ Crew stores data in `.pi/messenger/crew/`:
 .pi/messenger/crew/
 ├── config.json       # Project config (concurrency, etc.)
 ├── plan.json         # Plan metadata
-├── plan.md           # Gap analyst output
+├── plan.md           # Planner output
 ├── tasks/
 │   ├── task-1.json   # Task metadata
 │   ├── task-1.md     # Task spec
@@ -133,8 +133,10 @@ Create `.pi/messenger/crew/config.json`:
 ```json
 {
   "concurrency": {
-    "scouts": 1,    // Sequential scouts (default: 4)
     "workers": 3    // Max parallel workers (default: 2)
+  },
+  "planning": {
+    "maxPasses": 3  // Max planner passes before accepting last output
   }
 }
 ```

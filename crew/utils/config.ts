@@ -14,11 +14,10 @@ const PROJECT_CONFIG_FILE = "config.json";
 
 export interface CrewConfig {
   concurrency: {
-    scouts: number;
     workers: number;
   };
   truncation: {
-    scouts: MaxOutputConfig;
+    planners: MaxOutputConfig;
     workers: MaxOutputConfig;
     reviewers: MaxOutputConfig;
     analysts: MaxOutputConfig;
@@ -30,16 +29,16 @@ export interface CrewConfig {
   memory: { enabled: boolean };
   planSync: { enabled: boolean };
   review: { enabled: boolean; maxIterations: number };
+  planning: { maxPasses: number };
   work: { maxAttemptsPerTask: number; maxWaves: number; stopOnBlock: boolean };
 }
 
 const DEFAULT_CONFIG: CrewConfig = {
   concurrency: {
-    scouts: 4,
     workers: 2,
   },
   truncation: {
-    scouts: { bytes: 51200, lines: 500 },
+    planners: { bytes: 204800, lines: 5000 },
     workers: { bytes: 204800, lines: 5000 },
     reviewers: { bytes: 102400, lines: 2000 },
     analysts: { bytes: 102400, lines: 2000 },
@@ -48,6 +47,7 @@ const DEFAULT_CONFIG: CrewConfig = {
   memory: { enabled: false },
   planSync: { enabled: false },
   review: { enabled: true, maxIterations: 3 },
+  planning: { maxPasses: 3 },
   work: { maxAttemptsPerTask: 5, maxWaves: 50, stopOnBlock: false },
 };
 
@@ -95,7 +95,7 @@ export function loadCrewConfig(crewDir: string): CrewConfig {
  */
 export function getTruncationForRole(config: CrewConfig, role: string): MaxOutputConfig {
   switch (role) {
-    case "scout": return config.truncation.scouts;
+    case "planner": return config.truncation.planners;
     case "worker": return config.truncation.workers;
     case "reviewer": return config.truncation.reviewers;
     case "analyst": return config.truncation.analysts;

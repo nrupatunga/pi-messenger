@@ -12,6 +12,7 @@ import type { CrewParams } from "../types.js";
 import { result } from "../utils/result.js";
 import { spawnAgents } from "../agents.js";
 import { discoverCrewAgents } from "../utils/discover.js";
+import { parseVerdict, type ParsedReview } from "../utils/verdict.js";
 import * as store from "../store.js";
 
 export async function execute(
@@ -130,7 +131,7 @@ Output your verdict as SHIP, NEEDS_WORK, or MAJOR_RETHINK with detailed feedback
   }
 
   // Parse verdict from output
-  const verdict = parseVerdict(reviewResult.output);
+  const verdict: ParsedReview = parseVerdict(reviewResult.output);
 
   // Store review feedback in task for retry context
   store.updateTask(cwd, taskId, {
@@ -233,7 +234,7 @@ Output your verdict as SHIP (plan is solid), NEEDS_WORK (minor adjustments), or 
   }
 
   // Parse verdict
-  const verdict = parseVerdict(reviewResult.output);
+  const verdict: ParsedReview = parseVerdict(reviewResult.output);
 
   const text = `# Plan Review
 
@@ -288,54 +289,4 @@ function getCommitLog(baseCommit: string, cwd: string): string {
   } catch {
     return "*No commits*";
   }
-}
-
-interface ParsedReview {
-  verdict: "SHIP" | "NEEDS_WORK" | "MAJOR_RETHINK";
-  summary: string;
-  issues: string[];
-  suggestions: string[];
-}
-
-function parseVerdict(output: string): ParsedReview {
-  const result: ParsedReview = {
-    verdict: "NEEDS_WORK",
-    summary: "",
-    issues: [],
-    suggestions: []
-  };
-
-  // Extract verdict
-  const verdictMatch = output.match(/##\s*Verdict:\s*(SHIP|NEEDS_WORK|MAJOR_RETHINK)/i);
-  if (verdictMatch) {
-    result.verdict = verdictMatch[1].toUpperCase() as ParsedReview["verdict"];
-  }
-
-  // Extract summary (text between Verdict and next ##)
-  const summaryMatch = output.match(/##\s*Verdict:.*?\n([\s\S]*?)(?=\n##|$)/i);
-  if (summaryMatch) {
-    result.summary = summaryMatch[1].trim();
-  }
-
-  // Extract issues
-  const issuesMatch = output.match(/##\s*Issues?\s*\n([\s\S]*?)(?=\n##|$)/i);
-  if (issuesMatch) {
-    result.issues = issuesMatch[1]
-      .split("\n")
-      .filter(line => line.trim().startsWith("-") || line.trim().startsWith("*"))
-      .map(line => line.replace(/^[\s\-*]+/, "").trim())
-      .filter(Boolean);
-  }
-
-  // Extract suggestions
-  const suggestionsMatch = output.match(/##\s*Suggestions?\s*\n([\s\S]*?)(?=\n##|$)/i);
-  if (suggestionsMatch) {
-    result.suggestions = suggestionsMatch[1]
-      .split("\n")
-      .filter(line => line.trim().startsWith("-") || line.trim().startsWith("*"))
-      .map(line => line.replace(/^[\s\-*]+/, "").trim())
-      .filter(Boolean);
-  }
-
-  return result;
 }

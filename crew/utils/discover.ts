@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { MaxOutputConfig } from "./truncate.js";
 
-export type CrewRole = "scout" | "worker" | "reviewer" | "analyst";
+export type CrewRole = "planner" | "worker" | "reviewer" | "analyst";
 
 export interface CrewAgentConfig {
   name: string;

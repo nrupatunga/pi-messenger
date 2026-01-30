@@ -24,39 +24,17 @@ No epics. Just PRD-based task planning and execution.
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │  PHASE 1: PLANNING                                            pi_messenger({   │
 │                                                                action: "plan"}) │
+│                                                                                  │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                         SCOUTS (parallel)                                │   │
+│  │                          PLANNER (opus)                                  │   │
 │  │                                                                          │   │
-│  │   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │   │
-│  │   │  repo-scout  │  │  docs-scout  │  │practice-scout│                  │   │
-│  │   │    (opus)    │  │   (haiku)    │  │    (opus)    │                  │   │
-│  │   │              │  │              │  │              │                  │   │
-│  │   │ Codebase     │  │ PRD, README  │  │ Conventions  │                  │   │
-│  │   │ structure    │  │ specs, docs  │  │ patterns     │                  │   │
-│  │   └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                  │   │
-│  │          │                 │                 │                           │   │
-│  │   ┌──────────────┐  ┌──────────────┐        │                           │   │
-│  │   │  web-scout   │  │ github-scout │        │                           │   │
-│  │   │   (haiku)    │  │    (opus)    │        │                           │   │
-│  │   │              │  │              │        │                           │   │
-│  │   │ Best practic-│  │ Real repos   │        │                           │   │
-│  │   │ es, articles │  │ via gh CLI   │        │                           │   │
-│  │   └──────┬───────┘  └──────┬───────┘        │                           │   │
-│  │          │                 │                 │                           │   │
-│  │          └─────────────────┴─────────────────┘                           │   │
-│  │                            │                                             │   │
-│  │                    ┌───────▼───────┐                                     │   │
-│  │                    │  Findings...  │                                     │   │
-│  │                    └───────┬───────┘                                     │   │
-│  └────────────────────────────┼─────────────────────────────────────────────┘   │
-│                               │                                                  │
-│                               ▼                                                  │
-│  ┌─────────────────────────────────────────────────────────────────────────┐   │
-│  │                        GAP ANALYST (opus)                                │   │
-│  │                                                                          │   │
-│  │   • Synthesize scout findings                                            │   │
-│  │   • Identify gaps and edge cases                                         │   │
-│  │   • Create task breakdown with dependencies                              │   │
+│  │   1. Explore codebase (structure, patterns, conventions)                 │   │
+│  │   2. Read project documentation                                          │   │
+│  │   3. Web/GitHub research (if relevant)                                   │   │
+│  │   4. Gap analysis (edge cases, security, testing)                        │   │
+│  │   5. Task breakdown with dependencies                                    │   │
+│  │   6. Append findings to planning-progress.md                             │   │
+│  │   7. Reviewer checks plan; refine until SHIP or max passes               │   │
 │  │                                                                          │   │
 │  └──────────────────────────────┬──────────────────────────────────────────┘   │
 │                                 │                                               │
@@ -128,35 +106,29 @@ No epics. Just PRD-based task planning and execution.
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Note:** Review is a separate manual action (`action: "review"`), not automatic after work completion.
+**Note:** Plan review is automatic inside the planning loop; implementation review is a separate manual action (`action: "review"`).
 
 ## Model Summary
 
 | Role | Model | Agents |
 |------|-------|--------|
-| Scout (deep) | `claude-opus-4-5` | repo-scout, github-scout, practice-scout |
-| Scout (fast) | `claude-haiku-4-5` | docs-scout, web-scout |
-| Analyst | `claude-opus-4-5` | gap-analyst, interview-generator, plan-sync |
+| Planner | `claude-opus-4-5` | planner |
+| Analyst | `claude-opus-4-5` | interview-generator, plan-sync |
 | Worker | `claude-opus-4-5` | worker |
 | Reviewer | `openai/gpt-5.2-high` | reviewer |
 
 ## Agent Inventory
 
-### Scouts (5)
+### Planner (1)
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| `crew-repo-scout` | opus | Analyzes codebase structure, finds relevant files |
-| `crew-docs-scout` | haiku | Reads project docs (PRD, README, specs) |
-| `crew-practice-scout` | opus | Identifies coding conventions and patterns |
-| `crew-web-scout` | haiku | Searches web for best practices, articles |
-| `crew-github-scout` | opus | Searches GitHub repos, examines real code via `gh` CLI |
+| `crew-planner` | opus | Analyzes codebase and PRD, produces task breakdown |
 
-### Analysts (3)
+### Analysts (2)
 
 | Agent | Model | Purpose |
 |-------|-------|---------|
-| `crew-gap-analyst` | opus | Synthesizes scout findings into task breakdown |
 | `crew-interview-generator` | opus | Generates clarifying questions |
 | `crew-plan-sync` | opus | Updates downstream task specs after changes |
 
@@ -177,7 +149,8 @@ No epics. Just PRD-based task planning and execution.
 ```
 .pi/messenger/crew/
 ├── plan.json                 # Plan metadata (PRD path, task counts)
-├── plan.md                   # Gap analyst output (task breakdown)
+├── plan.md                   # Planner output (task breakdown)
+├── planning-progress.md      # Planning loop history + reviewer feedback
 ├── tasks/
 │   ├── task-1.json           # Task metadata (status, deps, attempts)
 │   ├── task-1.md             # Task specification
@@ -199,11 +172,10 @@ No epics. Just PRD-based task planning and execution.
 {
   "crew": {
     "concurrency": {
-      "scouts": 4,
       "workers": 2
     },
     "truncation": {
-      "scouts": { "bytes": 51200, "lines": 500 },
+      "planners": { "bytes": 204800, "lines": 5000 },
       "workers": { "bytes": 204800, "lines": 5000 },
       "reviewers": { "bytes": 102400, "lines": 2000 },
       "analysts": { "bytes": 102400, "lines": 2000 }
@@ -211,6 +183,9 @@ No epics. Just PRD-based task planning and execution.
     "review": {
       "enabled": true,
       "maxIterations": 3
+    },
+    "planning": {
+      "maxPasses": 3
     },
     "work": {
       "maxAttemptsPerTask": 5,
@@ -229,9 +204,10 @@ No epics. Just PRD-based task planning and execution.
 
 | Section | Description |
 |---------|-------------|
-| `concurrency` | Parallel execution limits |
+| `concurrency` | Parallel execution limits (workers only; planner always runs as a single agent) |
 | `truncation` | Output size limits per agent role |
 | `review` | Auto-review settings (note: `enabled` and `maxIterations` defined but not enforced) |
+| `planning` | Planning loop settings (`maxPasses`, set to 1 for single-pass) |
 | `work` | Execution limits (note: `maxWaves` and `maxAttemptsPerTask` defined but not enforced) |
 | `artifacts` | Debug artifact storage |
 | `memory` | Memory system (not yet implemented) |
