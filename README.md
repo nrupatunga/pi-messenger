@@ -225,6 +225,26 @@ The `plan` action runs a multi-pass planning loop: the planner drafts tasks, a r
 
 **No special format required** -- just put your docs in the project. The planner finds and reads markdown files, READMEs, and code comments.
 
+### How Work Execution Works
+
+Crew doesn't run tasks sequentially. Tasks form a dependency graph, and the work handler executes them in **waves** based on what's ready:
+
+```
+Wave 1:  task-1 (no deps)  ─┐
+         task-3 (no deps)  ─┤── run in parallel
+                             │
+Wave 2:  task-2 (→ task-1) ─┤── task-1 done, task-2 unblocked
+         task-4 (→ task-3) ─┘── task-3 done, task-4 unblocked
+
+Wave 3:  task-5 (→ task-2, task-4) ── both deps done
+```
+
+A task is **ready** when its status is pending and all its dependencies are completed. Each wave picks all ready tasks (up to `concurrency.workers`), spawns parallel workers, waits for them to finish, then checks what's newly unblocked. Independent tasks — those that don't depend on each other — run concurrently in the same wave.
+
+The planner structures tasks to maximize this parallelism. Foundation work (types, config, schemas) has no dependencies so it starts immediately. Features that don't touch each other get separate dependency chains so they can run in parallel. Tasks that need shared work done first (tests, integration, docs) depend on the tasks that produce it.
+
+A single `work` call runs one wave. Autonomous mode (`autonomous: true`) runs waves back-to-back until everything is done or blocked.
+
 ### Autonomous Mode
 
 Run tasks continuously until completion:
