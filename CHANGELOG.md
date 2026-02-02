@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.8.2] - 2026-02-01
+
+### Fixed
+- Adapt execute signature to pi v0.51.0: reorder signal, onUpdate, ctx parameters
+
 ## [0.8.1] - 2026-01-30
 
 ### Changed

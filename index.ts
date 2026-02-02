@@ -349,7 +349,7 @@ Mode: action (if provided) > legacy key-based routing`,
       autoRegisterPath?: "add" | "remove" | "list";
       list?: boolean;
       limit?: number;
-    }, _onUpdate, ctx, _signal) {
+    }, _signal, _onUpdate, ctx) {
       const {
         action,
         join,
