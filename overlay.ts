@@ -36,6 +36,7 @@ import {
 } from "./crew-overlay.js";
 import { hasLiveWorkers, onLiveWorkersChanged } from "./crew/live-progress.js";
 import { loadConfig } from "./config.js";
+import { traceMessenger } from "./debug-log.js";
 
 const AGENTS_TAB = "[agents]";
 const CREW_TAB = "[crew]";
@@ -55,6 +56,7 @@ export class MessengerOverlay implements Component, Focusable {
   private stuckThresholdMs: number;
   private progressTimer: ReturnType<typeof setInterval> | null = null;
   private progressUnsubscribe: (() => void) | null = null;
+  private renderCache: string[] | null = null;
 
   constructor(
     private tui: TUI,
@@ -75,11 +77,16 @@ export class MessengerOverlay implements Component, Focusable {
     }
 
     this.progressUnsubscribe = onLiveWorkersChanged(() => {
+      traceMessenger("OVERLAY_TRIGGER", {
+        source: "onLiveWorkersChanged",
+        selectedAgent: this.selectedAgent,
+        hasLiveWorkers: hasLiveWorkers(this.cwd),
+      });
       if (this.selectedAgent === CREW_TAB) {
         if (hasLiveWorkers(this.cwd)) this.startProgressRefresh();
         else this.stopProgressRefresh();
       }
-      this.tui.requestRender();
+      this.dirtyRender();
     });
 
     if (this.selectedAgent === CREW_TAB && hasLiveWorkers(this.cwd)) {
@@ -100,6 +107,12 @@ export class MessengerOverlay implements Component, Focusable {
 
   private hasPlan(): boolean {
     return crewStore.hasPlan(this.cwd);
+  }
+
+  /** Clear render cache and request a re-render. Use this instead of tui.requestRender() for internal state changes. */
+  private dirtyRender(): void {
+    this.renderCache = null;
+    this.tui.requestRender();
   }
 
   private getMessages(): AgentMailMessage[] {
@@ -130,7 +143,7 @@ export class MessengerOverlay implements Component, Focusable {
     if (this.progressTimer) return;
     this.progressTimer = setInterval(() => {
       if (hasLiveWorkers(this.cwd)) {
-        this.tui.requestRender();
+        this.dirtyRender();
       } else {
         this.stopProgressRefresh();
       }
@@ -171,7 +184,7 @@ export class MessengerOverlay implements Component, Focusable {
         // \Enter -> insert newline
         this.inputText = this.inputText.slice(0, this.cursorPos) + "\n" + this.inputText.slice(this.cursorPos);
         this.cursorPos++;
-        this.tui.requestRender();
+        this.dirtyRender();
         return;
       }
       // Not Enter after backslash - insert the backslash and continue processing the current input
@@ -183,19 +196,19 @@ export class MessengerOverlay implements Component, Focusable {
     // Intercept backslash for \Enter pattern
     if (data === "\\") {
       this.pendingBackslash = true;
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
     if (matchesKey(data, "tab")) {
       this.cycleTab(1, agents);
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
     if (matchesKey(data, "shift+tab")) {
       this.cycleTab(-1, agents);
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
@@ -204,11 +217,11 @@ export class MessengerOverlay implements Component, Focusable {
       if (this.inputText.length > 0) {
         if (this.cursorPos < this.inputText.length) {
           this.cursorPos++;
-          this.tui.requestRender();
+          this.dirtyRender();
         }
       } else {
         this.cycleTab(1, agents);
-        this.tui.requestRender();
+        this.dirtyRender();
       }
       return;
     }
@@ -217,11 +230,11 @@ export class MessengerOverlay implements Component, Focusable {
       if (this.inputText.length > 0) {
         if (this.cursorPos > 0) {
           this.cursorPos--;
-          this.tui.requestRender();
+          this.dirtyRender();
         }
       } else {
         this.cycleTab(-1, agents);
-        this.tui.requestRender();
+        this.dirtyRender();
       }
       return;
     }
@@ -234,7 +247,7 @@ export class MessengerOverlay implements Component, Focusable {
       } else {
         this.scroll(1);
       }
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
@@ -246,7 +259,7 @@ export class MessengerOverlay implements Component, Focusable {
       } else {
         this.scroll(-1);
       }
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
@@ -260,7 +273,7 @@ export class MessengerOverlay implements Component, Focusable {
         const messages = this.getMessages();
         this.scrollPosition = Math.max(0, messages.length - 1);
       }
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
@@ -273,7 +286,7 @@ export class MessengerOverlay implements Component, Focusable {
       } else {
         this.scrollPosition = 0;
       }
-      this.tui.requestRender();
+      this.dirtyRender();
       return;
     }
 
@@ -292,7 +305,7 @@ export class MessengerOverlay implements Component, Focusable {
       if (this.cursorPos > 0) {
         this.inputText = this.inputText.slice(0, this.cursorPos - 1) + this.inputText.slice(this.cursorPos);
         this.cursorPos--;
-        this.tui.requestRender();
+        this.dirtyRender();
       }
       return;
     }
@@ -307,7 +320,7 @@ export class MessengerOverlay implements Component, Focusable {
         while (pos > 0 && this.inputText[pos - 1] !== " " && this.inputText[pos - 1] !== "\n") pos--;
         this.inputText = this.inputText.slice(0, pos) + this.inputText.slice(this.cursorPos);
         this.cursorPos = pos;
-        this.tui.requestRender();
+        this.dirtyRender();
       }
       return;
     }
@@ -315,7 +328,7 @@ export class MessengerOverlay implements Component, Focusable {
     if (data.length > 0 && data.charCodeAt(0) >= 32) {
       this.inputText = this.inputText.slice(0, this.cursorPos) + data + this.inputText.slice(this.cursorPos);
       this.cursorPos += data.length;
-      this.tui.requestRender();
+      this.dirtyRender();
     }
   }
 
@@ -385,7 +398,7 @@ export class MessengerOverlay implements Component, Focusable {
       this.inputText = "";
       this.cursorPos = 0;
       this.scrollPosition = 0;
-      this.tui.requestRender();
+      this.dirtyRender();
     } else {
       const recipient = targetAgent ?? this.selectedAgent;
       if (!recipient || recipient === AGENTS_TAB || recipient === CREW_TAB) return;
@@ -404,7 +417,7 @@ export class MessengerOverlay implements Component, Focusable {
         this.inputText = "";
         this.cursorPos = 0;
         this.scrollPosition = 0;
-        this.tui.requestRender();
+        this.dirtyRender();
       } catch {
         // Keep input on failure
       }
@@ -412,6 +425,14 @@ export class MessengerOverlay implements Component, Focusable {
   }
 
   render(_width: number): string[] {
+    // Return cached render if nothing has changed (avoids redundant work from external requestRender calls)
+    if (this.renderCache) return this.renderCache;
+
+    traceMessenger("OVERLAY_RENDER", {
+      selectedAgent: this.selectedAgent,
+      inputLen: this.inputText.length,
+      scrollPosition: this.scrollPosition,
+    });
     this.cachedAgents = null;  // Clear cache at start of render cycle
     const w = this.width;
     const innerW = w - 2;
@@ -471,6 +492,7 @@ export class MessengerOverlay implements Component, Focusable {
     // Bottom border
     lines.push(border("╰" + "─".repeat(innerW) + "╯"));
 
+    this.renderCache = lines;
     return lines;
   }
 
@@ -872,7 +894,7 @@ export class MessengerOverlay implements Component, Focusable {
   }
 
   invalidate(): void {
-    // No cached state to invalidate
+    this.renderCache = null;
   }
 
   dispose(): void {
