@@ -36,7 +36,6 @@ import {
 } from "./crew-overlay.js";
 import { hasLiveWorkers, onLiveWorkersChanged } from "./crew/live-progress.js";
 import { loadConfig } from "./config.js";
-import { traceMessenger } from "./debug-log.js";
 
 const AGENTS_TAB = "[agents]";
 const CREW_TAB = "[crew]";
@@ -77,11 +76,6 @@ export class MessengerOverlay implements Component, Focusable {
     }
 
     this.progressUnsubscribe = onLiveWorkersChanged(() => {
-      traceMessenger("OVERLAY_TRIGGER", {
-        source: "onLiveWorkersChanged",
-        selectedAgent: this.selectedAgent,
-        hasLiveWorkers: hasLiveWorkers(this.cwd),
-      });
       if (this.selectedAgent === CREW_TAB) {
         if (hasLiveWorkers(this.cwd)) this.startProgressRefresh();
         else this.stopProgressRefresh();
@@ -428,11 +422,6 @@ export class MessengerOverlay implements Component, Focusable {
     // Return cached render if nothing has changed (avoids redundant work from external requestRender calls)
     if (this.renderCache) return this.renderCache;
 
-    traceMessenger("OVERLAY_RENDER", {
-      selectedAgent: this.selectedAgent,
-      inputLen: this.inputText.length,
-      scrollPosition: this.scrollPosition,
-    });
     this.cachedAgents = null;  // Clear cache at start of render cycle
     const w = this.width;
     const innerW = w - 2;

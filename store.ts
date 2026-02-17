@@ -1042,7 +1042,7 @@ export function startWatcher(
   }
 
   try {
-    state.watcher = fs.watch(inbox, () => {
+    state.watcher = fs.watch(inbox, (eventType, filename) => {
       // Fix 2: Debounce rapid events
       if (state.watcherDebounceTimer) {
         clearTimeout(state.watcherDebounceTimer);
