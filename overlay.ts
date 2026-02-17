@@ -4,7 +4,7 @@
 
 import { randomUUID } from "node:crypto";
 import type { Component, Focusable, TUI } from "@mariozechner/pi-tui";
-import { matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { CURSOR_MARKER, matchesKey, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import type { Theme } from "@mariozechner/pi-coding-agent";
 import {
   MAX_CHAT_HISTORY,
@@ -46,6 +46,8 @@ export class MessengerOverlay implements Component, Focusable {
 
   private selectedAgent: string | null = null;
   private inputText = "";
+  private cursorPos = 0;
+  private pendingBackslash = false;
   private scrollPosition = 0;
   private cachedAgents: AgentRegistration[] | null = null;
   private crewViewState: CrewViewState = createCrewViewState();
@@ -162,15 +164,65 @@ export class MessengerOverlay implements Component, Focusable {
       return;
     }
 
-    if (matchesKey(data, "tab") || matchesKey(data, "right")) {
+    // Handle pending backslash for \Enter newline insertion
+    if (this.pendingBackslash) {
+      this.pendingBackslash = false;
+      if (matchesKey(data, "enter") || data === "\r") {
+        // \Enter -> insert newline
+        this.inputText = this.inputText.slice(0, this.cursorPos) + "\n" + this.inputText.slice(this.cursorPos);
+        this.cursorPos++;
+        this.tui.requestRender();
+        return;
+      }
+      // Not Enter after backslash - insert the backslash and continue processing the current input
+      this.inputText = this.inputText.slice(0, this.cursorPos) + "\\" + this.inputText.slice(this.cursorPos);
+      this.cursorPos++;
+      // Fall through to process current data
+    }
+
+    // Intercept backslash for \Enter pattern
+    if (data === "\\") {
+      this.pendingBackslash = true;
+      this.tui.requestRender();
+      return;
+    }
+
+    if (matchesKey(data, "tab")) {
       this.cycleTab(1, agents);
       this.tui.requestRender();
       return;
     }
 
-    if (matchesKey(data, "shift+tab") || matchesKey(data, "left")) {
+    if (matchesKey(data, "shift+tab")) {
       this.cycleTab(-1, agents);
       this.tui.requestRender();
+      return;
+    }
+
+    // Left/right: move cursor when input has text, otherwise cycle tabs
+    if (matchesKey(data, "right")) {
+      if (this.inputText.length > 0) {
+        if (this.cursorPos < this.inputText.length) {
+          this.cursorPos++;
+          this.tui.requestRender();
+        }
+      } else {
+        this.cycleTab(1, agents);
+        this.tui.requestRender();
+      }
+      return;
+    }
+
+    if (matchesKey(data, "left")) {
+      if (this.inputText.length > 0) {
+        if (this.cursorPos > 0) {
+          this.cursorPos--;
+          this.tui.requestRender();
+        }
+      } else {
+        this.cycleTab(-1, agents);
+        this.tui.requestRender();
+      }
       return;
     }
 
@@ -202,6 +254,8 @@ export class MessengerOverlay implements Component, Focusable {
       if (this.selectedAgent === CREW_TAB) {
         this.crewViewState.selectedTaskIndex = 0;
         this.crewViewState.scrollOffset = 0;
+      } else if (this.inputText.length > 0) {
+        this.cursorPos = 0;
       } else {
         const messages = this.getMessages();
         this.scrollPosition = Math.max(0, messages.length - 1);
@@ -214,6 +268,8 @@ export class MessengerOverlay implements Component, Focusable {
       if (this.selectedAgent === CREW_TAB) {
         const tasks = crewStore.getTasks(this.cwd);
         this.crewViewState.selectedTaskIndex = Math.max(0, tasks.length - 1);
+      } else if (this.inputText.length > 0) {
+        this.cursorPos = this.inputText.length;
       } else {
         this.scrollPosition = 0;
       }
@@ -227,20 +283,38 @@ export class MessengerOverlay implements Component, Focusable {
       }
       if (this.inputText.trim()) {
         this.sendMessage(agents);
+        this.cursorPos = 0;
       }
       return;
     }
 
     if (matchesKey(data, "backspace")) {
-      if (this.inputText.length > 0) {
-        this.inputText = this.inputText.slice(0, -1);
+      if (this.cursorPos > 0) {
+        this.inputText = this.inputText.slice(0, this.cursorPos - 1) + this.inputText.slice(this.cursorPos);
+        this.cursorPos--;
+        this.tui.requestRender();
+      }
+      return;
+    }
+
+    // Ctrl+W: delete word backward
+    if (matchesKey(data, "ctrl+w")) {
+      if (this.cursorPos > 0) {
+        let pos = this.cursorPos;
+        // Skip trailing whitespace
+        while (pos > 0 && this.inputText[pos - 1] === " ") pos--;
+        // Delete back to previous word boundary (space or newline)
+        while (pos > 0 && this.inputText[pos - 1] !== " " && this.inputText[pos - 1] !== "\n") pos--;
+        this.inputText = this.inputText.slice(0, pos) + this.inputText.slice(this.cursorPos);
+        this.cursorPos = pos;
         this.tui.requestRender();
       }
       return;
     }
 
     if (data.length > 0 && data.charCodeAt(0) >= 32) {
-      this.inputText += data;
+      this.inputText = this.inputText.slice(0, this.cursorPos) + data + this.inputText.slice(this.cursorPos);
+      this.cursorPos += data.length;
       this.tui.requestRender();
     }
   }
@@ -309,6 +383,7 @@ export class MessengerOverlay implements Component, Focusable {
       const preview = text.length > 60 ? text.slice(0, 57) + "..." : text;
       logFeedEvent(this.dirs, this.state.agentName, "message", undefined, `broadcast: "${preview}"`);
       this.inputText = "";
+      this.cursorPos = 0;
       this.scrollPosition = 0;
       this.tui.requestRender();
     } else {
@@ -327,6 +402,7 @@ export class MessengerOverlay implements Component, Focusable {
         const preview = text.length > 60 ? text.slice(0, 57) + "..." : text;
         logFeedEvent(this.dirs, this.state.agentName, "message", recipient, `\u2192 ${recipient}: "${preview}"`);
         this.inputText = "";
+        this.cursorPos = 0;
         this.scrollPosition = 0;
         this.tui.requestRender();
       } catch {
@@ -731,18 +807,67 @@ export class MessengerOverlay implements Component, Focusable {
       placeholder = `Message ${this.selectedAgent}...`;
     }
 
-    const hint = this.theme.fg("dim", "[Tab] [Enter]");
-    const hintLen = visibleWidth("[Tab] [Enter]");
+    const hasNewlines = this.inputText.includes("\n");
+    const hint = this.theme.fg("dim", hasNewlines ? "[\\Enter ↵] [Enter ⏎]" : "[Tab] [Enter]");
+    const hintLen = visibleWidth(hasNewlines ? "[\\Enter ↵] [Enter ⏎]" : "[Tab] [Enter]");
 
-    if (this.inputText) {
+    // Marker for hardware cursor positioning (only when focused)
+    const marker = this.focused ? CURSOR_MARKER : "";
+
+    if (this.inputText || this.pendingBackslash) {
       const maxInputLen = Math.max(1, width - 2 - hintLen - 2);
-      const displayText = truncateToWidth(this.inputText, maxInputLen);
-      const padLen = width - 2 - visibleWidth(displayText) - hintLen;
-      return prompt + displayText + " ".repeat(Math.max(0, padLen)) + hint;
+
+      // For display, replace newlines with ↵ symbol and adjust cursor position
+      let displayInput = "";
+      let displayCursorPos = 0;
+      for (let i = 0; i < this.inputText.length; i++) {
+        if (i === this.cursorPos) displayCursorPos = displayInput.length;
+        if (this.inputText[i] === "\n") {
+          displayInput += "↵";
+        } else {
+          displayInput += this.inputText[i];
+        }
+      }
+      if (this.cursorPos >= this.inputText.length) displayCursorPos = displayInput.length;
+
+      // Append pending backslash indicator
+      if (this.pendingBackslash) {
+        displayInput += "\\";
+        displayCursorPos = displayInput.length;
+      }
+
+      // Horizontal scrolling: keep cursor visible within maxInputLen
+      let scrollStart = 0;
+      if (displayInput.length > maxInputLen) {
+        const halfWidth = Math.floor(maxInputLen / 2);
+        if (displayCursorPos < halfWidth) {
+          scrollStart = 0;
+        } else if (displayCursorPos > displayInput.length - halfWidth) {
+          scrollStart = displayInput.length - maxInputLen;
+        } else {
+          scrollStart = displayCursorPos - halfWidth;
+        }
+      }
+
+      const visibleText = displayInput.slice(scrollStart, scrollStart + maxInputLen);
+      const visibleCursorPos = displayCursorPos - scrollStart;
+
+      // Build text with inverse-video cursor
+      const beforeCursor = visibleText.slice(0, visibleCursorPos);
+      const atCursor = visibleText[visibleCursorPos] || " ";
+      const afterCursor = visibleText.slice(visibleCursorPos + 1);
+      const cursorChar = `\x1b[7m${atCursor}\x1b[27m`;
+      const textWithCursor = beforeCursor + marker + cursorChar + afterCursor;
+
+      const textVisualLen = visibleWidth(textWithCursor);
+      const padLen = width - 2 - textVisualLen - hintLen;
+      return prompt + textWithCursor + " ".repeat(Math.max(0, padLen)) + hint;
     } else {
-      const displayPlaceholder = truncateToWidth(placeholder, Math.max(1, width - 2 - hintLen - 2));
-      const padLen = width - 2 - visibleWidth(displayPlaceholder) - hintLen;
-      return prompt + this.theme.fg("dim", displayPlaceholder) + " ".repeat(Math.max(0, padLen)) + hint;
+      // Empty input: show placeholder with cursor at start
+      const cursorChar = `\x1b[7m \x1b[27m`;
+      const displayPlaceholder = truncateToWidth(placeholder, Math.max(1, width - 2 - hintLen - 3));
+      const padLen = width - 2 - 1 - visibleWidth(displayPlaceholder) - hintLen;
+      return prompt + marker + cursorChar + this.theme.fg("dim", displayPlaceholder) + " ".repeat(Math.max(0, padLen)) + hint;
     }
   }
 
